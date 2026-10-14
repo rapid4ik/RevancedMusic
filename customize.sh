@@ -4,7 +4,16 @@
 # 100% Compatible with Magisk / KernelSU / APatch
 # ==============================================================================
 
-# 1. Properly detect MODPATH (do NOT overwrite if already set by Magisk/KernelSU)
+# 1. Recovery mode check (TWRP is not supported due to lack of Android package manager)
+if [ "$BOOTMODE" = "false" ]; then
+    ui_print "****************************************************"
+    ui_print "❌ Installing through TWRP / recovery is not supported!"
+    ui_print "👉 Please install this module via Magisk, KernelSU, or APatch app."
+    ui_print "****************************************************"
+    abort "- Aborting installation !!"
+fi
+
+# 2. Properly detect MODPATH (do NOT overwrite if already set by Magisk/KernelSU)
 if [ -z "$MODPATH" ] || [ ! -f "$MODPATH/module.prop" ]; then
     if [ -f "${0%/*}/module.prop" ]; then
         MODPATH="${0%/*}"
@@ -18,7 +27,7 @@ APPNAME="YouTube Music"
 
 ui_print "- Installing YouTube Music RVX..."
 
-# 2. Unmount any stale bind mounts for this package
+# 3. Unmount any stale bind mounts for this package
 STOCK_BASE=$(pm path "$PKGNAME" 2>/dev/null | grep -E 'base|split' | head -n 1 | sed 's/package://g')
 [ -n "$STOCK_BASE" ] && umount -l "$STOCK_BASE" 2>/dev/null
 grep "$PKGNAME" /proc/mounts 2>/dev/null | while read -r line; do
@@ -26,51 +35,136 @@ grep "$PKGNAME" /proc/mounts 2>/dev/null | while read -r line; do
     [ -n "$mp" ] && umount -l "$mp" 2>/dev/null
 done
 
-# 3. If Stock APK is bundled in the module, install/update it to ensure clean match
-STOCK_BUNDLE=$(ls "$MODPATH/ytmusic"/*.apk 2>/dev/null | head -n 1)
-if [ -f "$STOCK_BUNDLE" ]; then
-    ui_print "- Found bundled Stock YouTube Music APK"
-    ui_print "- Installing Stock APK to ensure version compatibility..."
+# 4. Helper function: reliably install APK across KernelSU, Magisk, and APatch
+# Bypasses /data/adb 0700 permission restrictions by staging in /data/local/tmp and using stdin streaming
+install_stock_apk() {
+    local src="$1"
+    [ -f "$src" ] || return 1
     
-    pm install -r -d "$STOCK_BUNDLE" >/dev/null 2>&1 || \
-    pm install -r -d --user 0 "$STOCK_BUNDLE" >/dev/null 2>&1 || \
-    (
-        SESSION=$(pm install-create -r -d 2>/dev/null | grep -oE '[0-9]+')
-        if [ -n "$SESSION" ]; then
-            pm install-write "$SESSION" base.apk "$STOCK_BUNDLE" >/dev/null 2>&1
-            pm install-commit "$SESSION" >/dev/null 2>&1
-        fi
-    )
+    local tmp_apk="/data/local/tmp/ytmusic_stock_install.apk"
+    rm -f "$tmp_apk" 2>/dev/null
+    cp -f "$src" "$tmp_apk" || return 1
+    chmod 644 "$tmp_apk"
+    chown system:system "$tmp_apk" 2>/dev/null || chown 1000:1000 "$tmp_apk" 2>/dev/null
+    chcon u:object_r:apk_data_file:s0 "$tmp_apk" 2>/dev/null
 
+    local res=1
+    local out=""
+
+    # Attempt 1: Standard pm install from /data/local/tmp
+    out=$(pm install -r -d -g "$tmp_apk" 2>&1)
+    if echo "$out" | grep -qi "Success"; then
+        res=0
+    fi
+
+    # Attempt 2: Explicit primary user 0
+    if [ $res -ne 0 ]; then
+        out=$(pm install -r -d -g --user 0 "$tmp_apk" 2>&1)
+        if echo "$out" | grep -qi "Success"; then
+            res=0
+        fi
+    fi
+
+    # Attempt 3: Android 14+ bypass low target SDK block
+    if [ $res -ne 0 ]; then
+        out=$(pm install -r -d -g --bypass-low-target-sdk-block --user 0 "$tmp_apk" 2>&1)
+        if echo "$out" | grep -qi "Success"; then
+            res=0
+        fi
+    fi
+
+    # Attempt 4: Stream via standard input pipe into PackageInstaller session
+    # (Bypasses any filesystem traversal or permission restrictions completely)
+    if [ $res -ne 0 ]; then
+        local apk_size
+        apk_size=$(wc -c < "$src" 2>/dev/null | tr -d ' ')
+        local session
+        session=$(pm install-create -r -d -g --user 0 2>/dev/null | grep -oE '[0-9]+')
+        [ -z "$session" ] && session=$(pm install-create -r -d 2>/dev/null | grep -oE '[0-9]+')
+        if [ -n "$session" ]; then
+            if [ -n "$apk_size" ] && [ "$apk_size" -gt 0 ]; then
+                cat "$src" | pm install-write -S "$apk_size" "$session" base.apk - >/dev/null 2>&1
+            else
+                cat "$src" | pm install-write "$session" base.apk - >/dev/null 2>&1
+            fi
+            out=$(pm install-commit "$session" 2>&1)
+            if echo "$out" | grep -qi "Success"; then
+                res=0
+            fi
+        fi
+    fi
+
+    rm -f "$tmp_apk" 2>/dev/null
+    return $res
+}
+
+# 5. Check currently installed version & bundled stock APK
+RVAPPVER=$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2 | sed 's/^v//')
+[ -z "$RVAPPVER" ] && RVAPPVER="latest"
+
+STOCK_BUNDLE=$(ls "$MODPATH/ytmusic"/*.apk 2>/dev/null | head -n 1)
+[ -z "$STOCK_BUNDLE" ] && STOCK_BUNDLE=$(ls "$MODPATH/ori"/*.apk 2>/dev/null | head -n 1)
+[ -z "$STOCK_BUNDLE" ] && STOCK_BUNDLE=$(ls "$MODPATH/youtube"/*.apk 2>/dev/null | head -n 1)
+
+STOCKAPK=$(pm path "$PKGNAME" 2>/dev/null | grep -E 'base|split' | head -n 1 | sed 's/package://g')
+[ -z "$STOCKAPK" ] && STOCKAPK=$(pm path "$PKGNAME" 2>/dev/null | head -n 1 | sed 's/package://g')
+
+STOCKAPPVER=$(dumpsys package "$PKGNAME" 2>/dev/null | grep versionName | cut -d "=" -f 2 | sed -n '1p' | tr -d ' ')
+
+NEED_INSTALL=false
+if [ -z "$STOCKAPK" ] || [ ! -f "$STOCKAPK" ]; then
+    NEED_INSTALL=true
+    ui_print "- YouTube Music is not installed on system."
+elif [ -n "$STOCKAPPVER" ] && [ -n "$RVAPPVER" ] && [ "$STOCKAPPVER" != "$RVAPPVER" ]; then
+    NEED_INSTALL=true
+    ui_print "- Version mismatch: Installed ($STOCKAPPVER) != Module ($RVAPPVER)"
+fi
+
+if [ "$NEED_INSTALL" = "true" ]; then
+    if [ -f "$STOCK_BUNDLE" ]; then
+        ui_print "- Installing bundled Stock YouTube Music APK (v$RVAPPVER)..."
+        install_stock_apk "$STOCK_BUNDLE"
+    fi
+
+    # Wait and verify package registration
+    ui_print "- Verifying YouTube Music package registration..."
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        STOCKAPK=$(pm path "$PKGNAME" 2>/dev/null | grep -E 'base|split' | head -n 1 | sed 's/package://g')
+        [ -z "$STOCKAPK" ] && STOCKAPK=$(pm path "$PKGNAME" 2>/dev/null | head -n 1 | sed 's/package://g')
+        if [ -n "$STOCKAPK" ] && [ -f "$STOCKAPK" ]; then
+            break
+        fi
+        sleep 1
+    done
+fi
+
+# Backup bundled APK to ori/ for future offline boot restoring
+if [ -d "$MODPATH/ytmusic" ]; then
     mkdir -p "$MODPATH/ori"
     mv "$MODPATH/ytmusic"/* "$MODPATH/ori/" 2>/dev/null
     rm -rf "$MODPATH/ytmusic"
 fi
 
-# 4. Verify that YouTube Music is installed on the device
+# Final check if Stock APK is present
 STOCKAPK=$(pm path "$PKGNAME" 2>/dev/null | grep -E 'base|split' | head -n 1 | sed 's/package://g')
-if [ -z "$STOCKAPK" ]; then
-    STOCKAPK=$(pm path "$PKGNAME" 2>/dev/null | head -n 1 | sed 's/package://g')
-fi
+[ -z "$STOCKAPK" ] && STOCKAPK=$(pm path "$PKGNAME" 2>/dev/null | head -n 1 | sed 's/package://g')
 
 if [ -z "$STOCKAPK" ] || [ ! -f "$STOCKAPK" ]; then
     ui_print "****************************************************"
-    ui_print "❌ YouTube Music ($PKGNAME) is not installed!"
-    ui_print "👉 Please install official YouTube Music from Google Play Store,"
-    ui_print "   then flash this module again."
+    ui_print "❌ Failed to install or locate YouTube Music ($PKGNAME)!"
+    ui_print "👉 If automatic installation is restricted by your ROM,"
+    ui_print "   please install official YouTube Music from Play Store,"
+    ui_print "   then re-flash this module."
     ui_print "****************************************************"
     abort "- Aborting installation !!"
 fi
 
 ui_print "- Detected base APK: $STOCKAPK"
 
-# 5. Locate patched RVX APK in module and prepare in app/
+# 6. Locate patched RVX APK in module and prepare in app/
 mkdir -p "$MODPATH/app"
 
-RVAPPVER=$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2 | sed 's/^v//')
-[ -z "$RVAPPVER" ] && RVAPPVER="latest"
-
-PATCHED_APK=$(ls "$MODPATH"/*-Anddea.apk "$MODPATH"/*.apk 2>/dev/null | grep -v "module.prop" | head -n 1)
+PATCHED_APK=$(ls "$MODPATH"/*-Anddea.apk "$MODPATH"/*-revanced*.apk "$MODPATH"/*.apk 2>/dev/null | grep -v "module.prop" | head -n 1)
 RVAPK="$MODPATH/app/YouTubeMusicRevanced-${RVAPPVER}.apk"
 
 if [ -n "$PATCHED_APK" ] && [ -f "$PATCHED_APK" ]; then
@@ -86,7 +180,7 @@ if [ ! -f "$RVAPK" ]; then
     abort "- Aborting installation !!"
 fi
 
-# 6. Apply live bind-mount immediately (Hot-Mount)
+# 7. Apply live bind-mount immediately (Hot-Mount)
 chmod 644 "$RVAPK"
 chown system:system "$RVAPK" 2>/dev/null
 chcon u:object_r:apk_data_file:s0 "$RVAPK" 2>/dev/null
@@ -98,4 +192,5 @@ am force-stop "$PKGNAME" 2>/dev/null
 
 ui_print "- Installation Successful !!"
 ui_print "- Patched YouTube Music RVX mounted successfully."
-am start -n com.google.android.apps.youtube.music/com.google.android.apps.youtube.music.activities.MusicActivity >/dev/null 2>&1
+am start -n com.google.android.apps.youtube.music/com.google.android.apps.youtube.music.activities.MusicActivity >/dev/null 2>&1 || \
+monkey -p com.google.android.apps.youtube.music -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
