@@ -28,11 +28,11 @@ on:
       build_mode:
         description: 'Build Execution Mode (Test Artifact vs Official Release)'
         required: true
-        default: 'test'
+        default: 'release'
         type: choice
         options:
-          - test
           - release
+          - test
 
   repository_dispatch:
     types: [build-rvx]
@@ -90,7 +90,7 @@ jobs:
             VERSION="${INPUT_VERSION:-recommended}"
             SOURCE="${INPUT_SOURCE:-anddea}"
             TAG="${INPUT_TAG:-dev}"
-            MODE="${INPUT_MODE:-test}"
+            MODE="${INPUT_MODE:-release}"
             
             cp config/golden-preset.json "$CONFIG_FILE"
           fi
@@ -98,7 +98,7 @@ jobs:
           VERSION=${VERSION:-recommended}
           SOURCE=${SOURCE:-anddea}
           TAG=${TAG:-dev}
-          MODE=${MODE:-test}
+          MODE=${MODE:-release}
 
           # Security whitelist & regex validation
           if [[ ! "$VERSION" =~ ^(recommended|[vV]?[0-9]+(\.[0-9]+)*(-[a-zA-Z0-9.]+)?)$ ]]; then
