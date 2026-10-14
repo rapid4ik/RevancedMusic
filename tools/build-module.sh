@@ -142,6 +142,26 @@ python3 "$WORKDIR/tools/patch_orchestrator.py" generate_args \
     "$ROOT_ARGS_FILE"
 
 # ------------------------------------------------------------------------------
+# 5.1. Ensure Signing Keystore
+# ------------------------------------------------------------------------------
+KEYSTORE_PATH="$BUILD_DIR/morphe.keystore"
+if [ ! -f "$KEYSTORE_PATH" ]; then
+    echo "🔑 Generating signing keystore..."
+    keytool -genkeypair \
+        -alias "Morphe" \
+        -keyalg RSA \
+        -keysize 2048 \
+        -validity 10000 \
+        -keystore "$KEYSTORE_PATH" \
+        -storepass "morphe" \
+        -keypass "morphe" \
+        -dname "CN=Morphe, OU=Morphe, O=Morphe, L=Morphe, ST=Morphe, C=US" \
+        -deststoretype pkcs12
+    mkdir -p "$BUILD_DIR/morphe-data"
+    cp "$KEYSTORE_PATH" "$BUILD_DIR/morphe-data/morphe.keystore"
+fi
+
+# ------------------------------------------------------------------------------
 # 6. Execute Patching for Non-Root & Root
 # ------------------------------------------------------------------------------
 NONROOT_OUT="$BUILD_DIR/YouTubeMusic.RVX.v$TARGET_VERSION-NonRoot.apk"
@@ -152,6 +172,9 @@ mapfile -t NONROOT_ARGS < "$NONROOT_ARGS_FILE"
 java -jar "$CLI_JAR" \
     patch \
     -f \
+    --keystore="$KEYSTORE_PATH" \
+    --keystore-password="morphe" \
+    --keystore-entry-password="morphe" \
     -p "$PATCH_MPP" \
     -o "$NONROOT_OUT" \
     "${NONROOT_ARGS[@]}" \
@@ -167,6 +190,9 @@ mapfile -t ROOT_ARGS < "$ROOT_ARGS_FILE"
 java -jar "$CLI_JAR" \
     patch \
     -f \
+    --keystore="$KEYSTORE_PATH" \
+    --keystore-password="morphe" \
+    --keystore-entry-password="morphe" \
     -p "$PATCH_MPP" \
     -o "$ROOT_PATCHED_APK" \
     "${ROOT_ARGS[@]}" \
