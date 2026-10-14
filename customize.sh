@@ -102,9 +102,20 @@ install_stock_apk() {
 RVAPPVER=$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2 | sed 's/^v//')
 [ -z "$RVAPPVER" ] && RVAPPVER="latest"
 
-STOCK_BUNDLE=$(ls "$MODPATH/ytmusic"/*.apk 2>/dev/null | head -n 1)
-[ -z "$STOCK_BUNDLE" ] && STOCK_BUNDLE=$(ls "$MODPATH/ori"/*.apk 2>/dev/null | head -n 1)
-[ -z "$STOCK_BUNDLE" ] && STOCK_BUNDLE=$(ls "$MODPATH/youtube"/*.apk 2>/dev/null | head -n 1)
+DEVICE_ABI=$(getprop ro.product.cpu.abi)
+DEVICE_ABILIST=$(getprop ro.product.cpu.abilist)
+
+# Dynamically select matching architecture for this device
+if echo "$DEVICE_ABI $DEVICE_ABILIST" | grep -qi "arm64"; then
+    ui_print "- Detected 64-bit device architecture ($DEVICE_ABI)"
+    STOCK_BUNDLE=$(ls "$MODPATH/ytmusic"/*arm64*.apk "$MODPATH/ori"/*arm64*.apk 2>/dev/null | head -n 1)
+else
+    ui_print "- Detected 32-bit device architecture ($DEVICE_ABI)"
+    STOCK_BUNDLE=$(ls "$MODPATH/ytmusic"/*v7a*.apk "$MODPATH/ori"/*v7a*.apk 2>/dev/null | head -n 1)
+fi
+
+# Fallback to any stock APK present if specific ABI variant was not matched
+[ -z "$STOCK_BUNDLE" ] && STOCK_BUNDLE=$(ls "$MODPATH/ytmusic"/*.apk "$MODPATH/ori"/*.apk 2>/dev/null | head -n 1)
 
 STOCKAPK=$(pm path "$PKGNAME" 2>/dev/null | grep -E 'base|split' | head -n 1 | sed 's/package://g')
 [ -z "$STOCKAPK" ] && STOCKAPK=$(pm path "$PKGNAME" 2>/dev/null | head -n 1 | sed 's/package://g')
@@ -138,7 +149,7 @@ if [ "$NEED_INSTALL" = "true" ]; then
     done
 fi
 
-# Backup bundled APK to ori/ for future offline boot restoring
+# Backup bundled APKs to ori/ for future offline boot restoring
 if [ -d "$MODPATH/ytmusic" ]; then
     mkdir -p "$MODPATH/ori"
     mv "$MODPATH/ytmusic"/* "$MODPATH/ori/" 2>/dev/null
