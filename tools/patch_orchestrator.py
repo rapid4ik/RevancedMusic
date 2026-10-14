@@ -130,13 +130,13 @@ def build_cli_arguments(patches_manifest, target_version, config_payload, is_roo
                         patch_options[p_name][k] = str(v).strip()
 
     # Morphe CLI / picocli syntax:
-    # 1. Enable patches (-e <name>) with options (-O <key=val>) preceding them
+    # 1. Enable patches (-e <name>) followed by their options (-O <key=val>)
     for p_name in sorted(list(included_from_payload)):
         if p_name in valid_patch_names and p_name not in excluded_from_payload:
+            args.extend(["-e", p_name])
             opts = patch_options.get(p_name, {})
             for opt_k, opt_v in opts.items():
                 args.extend(["-O", f"{opt_k}={opt_v}"])
-            args.extend(["-e", p_name])
 
     # 2. Disable patches (-d <name>)
     for p_name in sorted(list(excluded_from_payload)):

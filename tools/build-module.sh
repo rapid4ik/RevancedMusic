@@ -148,7 +148,7 @@ KEYSTORE_PATH="$BUILD_DIR/morphe.keystore"
 if [ ! -f "$KEYSTORE_PATH" ]; then
     echo "🔑 Generating signing keystore..."
     keytool -genkeypair \
-        -alias "Morphe" \
+        -alias "morphe" \
         -keyalg RSA \
         -keysize 2048 \
         -validity 10000 \
@@ -173,6 +173,7 @@ java -jar "$CLI_JAR" \
     patch \
     -f \
     --keystore="$KEYSTORE_PATH" \
+    --keystore-entry-alias="morphe" \
     --keystore-password="morphe" \
     --keystore-entry-password="morphe" \
     -p "$PATCH_MPP" \
@@ -191,6 +192,7 @@ java -jar "$CLI_JAR" \
     patch \
     -f \
     --keystore="$KEYSTORE_PATH" \
+    --keystore-entry-alias="morphe" \
     --keystore-password="morphe" \
     --keystore-entry-password="morphe" \
     -p "$PATCH_MPP" \
