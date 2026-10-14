@@ -34,6 +34,15 @@ on:
           - release
           - test
 
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - 'README.md'
+      - 'changelog.md'
+      - '.gitignore'
+
   repository_dispatch:
     types: [build-rvx]
 
