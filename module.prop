@@ -1,0 +1,7 @@
+id=YouTube-Music-RVX
+name=YouTube Music RVX
+version=v8.30.54
+versionCode=20261014
+author=rapid4ik & ReVanced Team
+description=YouTube Music RVX Magisk / KernelSU / APatch module built with Morphe CLI & Anddea Patches
+updateJson=https://raw.githubusercontent.com/rapid4ik/RevancedMusic/main/update.json

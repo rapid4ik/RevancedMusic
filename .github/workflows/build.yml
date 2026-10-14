@@ -1,0 +1,162 @@
+name: Build & Package YouTube Music RVX
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      music_version:
+        description: 'Select YouTube Music Version (recommended or specific version like 8.30.54)'
+        required: true
+        default: 'recommended'
+        type: string
+      patch_source:
+        description: 'Patch Source'
+        required: true
+        default: 'anddea'
+        type: choice
+        options:
+          - anddea
+          - morphe
+          - revanced
+      patch_tag:
+        description: 'Patch Channel / Release Tag (dev, latest, or specific tag like v4.3.0)'
+        required: true
+        default: 'dev'
+        type: string
+      build_mode:
+        description: 'Build Execution Mode (Test Artifact vs Official Release)'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+          - release
+
+  repository_dispatch:
+    types: [build-rvx]
+
+jobs:
+  build-and-package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install System Utilities & Python Packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq zip unzip curl
+          python3 -m pip install -q packaging requests beautifulsoup4
+
+      - name: Extract Dynamic Configuration Payload
+        id: params
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+          INPUT_VERSION: ${{ inputs.music_version }}
+          INPUT_SOURCE: ${{ inputs.patch_source }}
+          INPUT_TAG: ${{ inputs.patch_tag }}
+          INPUT_MODE: ${{ inputs.build_mode }}
+        run: |
+          CONFIG_FILE="build_out/dynamic_config.json"
+          mkdir -p build_out
+
+          if [ "$EVENT_NAME" = "repository_dispatch" ]; then
+            echo "📥 Reading configuration from Web Dashboard (repository_dispatch)..."
+            printf '%s\n' "$EVENT_PAYLOAD" > "$CONFIG_FILE"
+
+            VERSION=$(jq -r '.music_version // "recommended"' "$CONFIG_FILE")
+            SOURCE=$(jq -r '.patch_source // "anddea"' "$CONFIG_FILE")
+            TAG=$(jq -r '.patch_tag // "dev"' "$CONFIG_FILE")
+            MODE=$(jq -r '.build_mode // "test"' "$CONFIG_FILE")
+          else
+            echo "📥 Reading configuration from GitHub Form (workflow_dispatch)..."
+            VERSION="${INPUT_VERSION:-recommended}"
+            SOURCE="${INPUT_SOURCE:-anddea}"
+            TAG="${INPUT_TAG:-dev}"
+            MODE="${INPUT_MODE:-test}"
+            
+            cp config/golden-preset.json "$CONFIG_FILE"
+          fi
+
+          VERSION=${VERSION:-recommended}
+          SOURCE=${SOURCE:-anddea}
+          TAG=${TAG:-dev}
+          MODE=${MODE:-test}
+
+          # Security whitelist & regex validation
+          if [[ ! "$VERSION" =~ ^(recommended|[vV]?[0-9]+(\.[0-9]+)*(-[a-zA-Z0-9.]+)?)$ ]]; then
+            echo "❌ Invalid YouTube Music version format: $VERSION"
+            exit 1
+          fi
+
+          if [[ ! "$SOURCE" =~ ^(anddea|morphe|revanced)$ ]]; then
+            echo "❌ Invalid patch source: $SOURCE"
+            exit 1
+          fi
+
+          if [[ ! "$MODE" =~ ^(test|release)$ ]]; then
+            echo "❌ Invalid build mode: $MODE"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "source=$SOURCE" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "mode=$MODE" >> $GITHUB_OUTPUT
+          echo "config=$CONFIG_FILE" >> $GITHUB_OUTPUT
+
+      - name: Run Build Script
+        run: |
+          chmod +x tools/*.sh customize.sh service.sh action.sh uninstall.sh
+          bash tools/build-module.sh \
+            "${{ steps.params.outputs.version }}" \
+            "${{ steps.params.outputs.source }}" \
+            "${{ steps.params.outputs.tag }}" \
+            "${{ steps.params.outputs.mode }}" \
+            "${{ steps.params.outputs.config }}"
+
+      - name: Upload Test Artifacts (Test Mode)
+        if: steps.params.outputs.mode == 'test'
+        uses: actions/upload-artifact@v4
+        with:
+          name: YouTubeMusic-RVX-Test-Artifacts
+          path: |
+            build_out/*.apk
+            build_out/*.zip
+            build_out/*.log
+            build_out/*_args.txt
+          retention-days: 7
+
+      - name: Publish Official Release (Release Mode)
+        if: steps.params.outputs.mode == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MODULE_ZIP=$(ls build_out/YouTubeMusic.RVX.v*.zip | head -n 1)
+          NONROOT_APK=$(ls build_out/YouTubeMusic.RVX.v*-NonRoot.apk | head -n 1)
+          VERSION_TAG=$(basename "$MODULE_ZIP" .zip | sed 's/YouTubeMusic.RVX.//')
+          RELEASE_TITLE="YouTube Music RVX $VERSION_TAG"
+          
+          NOTES="### 🎵 YouTube Music RVX Release ($VERSION_TAG)\n- Patched with Morphe CLI & ${{ steps.params.outputs.source }} Patches\n- Includes **Root Module** (Magisk / KernelSU / APatch) and **Non-Root APK**\n\n### 📦 Downloads\n- \`$(basename "$NONROOT_APK")\`: Standalone APK (Install GmsCore / MicroG to sign in)\n- \`$(basename "$MODULE_ZIP")\`: Flashable Module for Magisk / KernelSU / APatch\n\n### ✨ Features\n- Background Playback & No Ads\n- Always High Bitrate\n- Synchronized Third-Party Lyrics\n- Track Crossfade & SponsorBlock\n- Android Auto Support (Certificate Spoof)"
+
+          echo "🚀 Publishing official release: $VERSION_TAG"
+          gh release create "$VERSION_TAG" "$MODULE_ZIP" "$NONROOT_APK" \
+            --title "$RELEASE_TITLE" \
+            --notes "$NOTES"

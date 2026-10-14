@@ -1,0 +1,36 @@
+{
+  "name": "Golden Preset (YouTube Music RVX - 46 Patches)",
+  "source": "anddea",
+  "app": "com.google.android.apps.youtube.music",
+  "description": "Лучший пресет кастомизации YouTube Music: максимальное качество звука (Always High), AMOLED Pure Black (#000000), фоновое воспроизведение, пропуск рекламы, тексты песен, Android Auto и SponsorBlock.",
+  "excludedPatches": [
+    "Enable debug logging"
+  ],
+  "rootExcludedPatches": [
+    "GmsCore support",
+    "MicroG support",
+    "Spoof signature"
+  ],
+  "nonRootIncludedPatches": [
+    "GmsCore support"
+  ],
+  "options": {
+    "Custom branding for YouTube Music": {
+      "appIcon": "original"
+    },
+    "Settings for YouTube Music": {
+      "rvxSettingsLabel": "RVX"
+    },
+    "Theme": {
+      "darkThemeColor": "#FF000000",
+      "precompileLegacyThemes": "false"
+    },
+    "Visual preferences icons for YouTube Music": {
+      "settingsMenuIcon": "extension",
+      "applyToAll": "true"
+    },
+    "Player components": {
+      "swipeToDismissMiniPlayer": "true"
+    }
+  }
+}

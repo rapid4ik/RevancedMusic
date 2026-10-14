@@ -1,0 +1,51 @@
+[
+  {
+    "id": "anddea",
+    "name": "Anddea Patches",
+    "repository": "anddea/revanced-patches",
+    "manifestUrl": "https://raw.githubusercontent.com/anddea/revanced-patches/refs/heads/main/patches-list.json",
+    "manifestCdnUrl": "https://cdn.jsdelivr.net/gh/anddea/revanced-patches@main/patches-list.json",
+    "defaultReleaseType": "dev",
+    "isDefault": true,
+    "badge": "Recommended",
+    "avatarText": "A",
+    "avatarGradient": "linear-gradient(135deg, #EF4444 0%, #991B1B 100%)",
+    "description": "Полный набор функций кастомизации для YouTube Music RVX с самыми регулярными обновлениями.",
+    "fallbackTags": [
+      { "tag_name": "v4.3.1-dev.1", "name": "v4.3.1-dev.1 (Dev)", "prerelease": true, "published_at": "2026-10-10T12:00:00Z" },
+      { "tag_name": "v4.3.0", "name": "v4.3.0 (Stable)", "prerelease": false, "published_at": "2026-10-05T12:00:00Z" }
+    ]
+  },
+  {
+    "id": "morphe",
+    "name": "Morphe Official",
+    "repository": "MorpheApp/morphe-patches",
+    "manifestUrl": "https://raw.githubusercontent.com/MorpheApp/morphe-patches/refs/heads/main/patches-list.json",
+    "manifestCdnUrl": "https://cdn.jsdelivr.net/gh/MorpheApp/morphe-patches@main/patches-list.json",
+    "defaultReleaseType": "latest",
+    "isDefault": false,
+    "badge": "Morphe Team",
+    "avatarText": "M",
+    "avatarGradient": "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
+    "description": "Официальные патчи экосистемы Morphe Manager.",
+    "fallbackTags": [
+      { "tag_name": "v1.18.0", "name": "v1.18.0 (Stable)", "prerelease": false, "published_at": "2026-10-01T12:00:00Z" }
+    ]
+  },
+  {
+    "id": "revanced",
+    "name": "ReVanced Official",
+    "repository": "ReVanced/revanced-patches",
+    "manifestUrl": "https://raw.githubusercontent.com/ReVanced/revanced-patches/refs/heads/main/patches.json",
+    "manifestCdnUrl": "https://cdn.jsdelivr.net/gh/ReVanced/revanced-patches@main/patches.json",
+    "defaultReleaseType": "latest",
+    "isDefault": false,
+    "badge": "Official Upstream",
+    "avatarText": "R",
+    "avatarGradient": "linear-gradient(135deg, #10B981 0%, #047857 100%)",
+    "description": "Базовые официальные upstream патчи проекта ReVanced.",
+    "fallbackTags": [
+      { "tag_name": "v4.16.0", "name": "v4.16.0 (Stable)", "prerelease": false, "published_at": "2026-10-02T12:00:00Z" }
+    ]
+  }
+]

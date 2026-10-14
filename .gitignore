@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+build_out/
+*.apk
+*.zip
+*.log
+*.tmp
+stock-*.apk
+target/
+daemon/target/
+bin/
+.daemon_token
+.daemon_port
+upstream_youtube_revanced/

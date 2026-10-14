@@ -1,0 +1,47 @@
+name: Check Upstream Updates
+
+permissions:
+  contents: write
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python3 -m pip install -q requests beautifulsoup4 packaging
+
+      - name: Fetch Latest Patches & YouTube Music Versions
+        id: checker
+        run: |
+          mkdir -p config
+          python3 tools/fetch_versions.py --app youtube-music --pages 3 --output config/ytmusic-versions.json || true
+          
+          LATEST_PATCH_TAG=$(curl -sL https://api.github.com/repos/anddea/revanced-patches/releases | jq -r '.[0].tag_name')
+          echo "latest_patch_tag=$LATEST_PATCH_TAG" >> $GITHUB_OUTPUT
+
+      - name: Commit & Push Version Manifest
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git add config/ytmusic-versions.json || true
+          if git diff --staged --quiet; then
+            echo "No changes in version manifest."
+          else
+            git commit -m "chore(auto): update YouTube Music versions list [skip ci]"
+            git push
+          fi
