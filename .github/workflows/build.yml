@@ -162,9 +162,17 @@ jobs:
           VERSION_TAG=$(basename "$MODULE_ZIP" .zip | sed 's/YouTubeMusic.RVX.//')
           RELEASE_TITLE="YouTube Music RVX $VERSION_TAG"
           
-          NOTES="### 🎵 YouTube Music RVX Release ($VERSION_TAG)\n- Patched with Morphe CLI & ${{ steps.params.outputs.source }} Patches\n- Includes **Root Module** (Magisk / KernelSU / APatch) and **Non-Root APK**\n\n### 📦 Downloads\n- \`$(basename "$NONROOT_APK")\`: Standalone APK (Install GmsCore / MicroG to sign in)\n- \`$(basename "$MODULE_ZIP")\`: Flashable Module for Magisk / KernelSU / APatch\n\n### ✨ Features\n- Background Playback & No Ads\n- Always High Bitrate\n- Synchronized Third-Party Lyrics\n- Track Crossfade & SponsorBlock\n- Android Auto Support (Certificate Spoof)"
+          sed -e "s/\$VERSION_TAG/$VERSION_TAG/g" \
+              -e "s/\$SOURCE/${{ steps.params.outputs.source }}/g" \
+              -e "s/\$NONROOT_APK/$(basename "$NONROOT_APK")/g" \
+              -e "s/\$MODULE_ZIP/$(basename "$MODULE_ZIP")/g" \
+              config/release_notes_template.md > build_out/release_notes.md
 
           echo "🚀 Publishing official release: $VERSION_TAG"
           gh release create "$VERSION_TAG" "$MODULE_ZIP" "$NONROOT_APK" \
             --title "$RELEASE_TITLE" \
-            --notes "$NOTES"
+            --notes-file build_out/release_notes.md \
+            --verify-tag || \
+          (echo "⚠️ Release $VERSION_TAG already exists, updating assets & notes..." && \
+           gh release upload "$VERSION_TAG" "$MODULE_ZIP" "$NONROOT_APK" --clobber && \
+           gh release edit "$VERSION_TAG" --title "$RELEASE_TITLE" --notes-file build_out/release_notes.md)
